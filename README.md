@@ -7,14 +7,17 @@ Funziona da smartphone, tablet e PC. Tutti i dati inseriti restano sul dispositi
 
 | File | A cosa serve |
 |---|---|
-| `index.html` | L'app completa, in un unico file: dati iniziali, piantine ufficiali dei padiglioni 8A e 8B, elenco espositori ufficiale dei due padiglioni, caratteri, generatore PDF, lettore QR e lettore di PDF già inclusi |
+| `index.html` | L'app completa, in un unico file: dati iniziali, elenco espositori ufficiale di tutti i padiglioni (oltre 4.300 righe), caratteri, generatore PDF, lettore QR e lettore di PDF già inclusi |
 | `sw.js` | Permette di aprire l'app anche senza connessione, dopo la prima apertura |
+| `manifest.webmanifest` | Nome, icona e colori dell'app: serve ad Android (e Chrome su PC) per installarla come app |
+| `icon-192.png`, `icon-512.png` | Icone dell'app installata |
+| `mappa-….png` (17 file) | Piantine ufficiali dei padiglioni e piantina generale. Devono stare accanto a `index.html` |
 | `.nojekyll` | Dice a GitHub Pages di pubblicare i file così come sono |
 
 ## Pubblicazione su GitHub Pages
 
 1. Crea un nuovo repository su GitHub.
-2. Carica i file nella radice del repository: **Add file → Upload files**. Il file `.nojekyll` è nascosto: se non riesci a selezionarlo puoi ometterlo, l'app funziona lo stesso.
+2. Carica **tutti** i file nella radice del repository, senza cartelle: **Add file → Upload files**. Il file `.nojekyll` è nascosto: se non riesci a selezionarlo puoi ometterlo, l'app funziona lo stesso.
 3. Vai su **Settings → Pages**. In *Build and deployment* scegli *Deploy from a branch*, poi il branch `main` e la cartella `/ (root)`, e salva.
 4. Dopo un paio di minuti l'app è online a un indirizzo del tipo `https://NOME-UTENTE.github.io/NOME-REPOSITORY/`.
 
@@ -23,9 +26,9 @@ L'indirizzo è **https**, quindi fotocamera (lettura QR) e microfono (registrazi
 ## Installazione sul telefono
 
 - **iPhone (Safari):** apri l'indirizzo, tocca *Condividi* e poi *Aggiungi alla schermata Home*.
-- **Android (Chrome):** apri l'indirizzo, tocca il menu ⋮ e poi *Aggiungi a schermata Home* (o *Installa app*).
+- **Android (Chrome):** apri l'indirizzo del sito con Chrome, tocca il menu ⋮ e poi *Installa app* (o *Aggiungi a schermata Home*). Non scaricare il file `index.html` sul telefono: va aperto dall'indirizzo `https://…github.io/…`.
 
-Aprila una volta con la rete attiva: da quel momento si apre anche offline.
+Aprila una volta con la rete attiva e attendi qualche secondo: l'app salva anche tutte le piantine, e da quel momento si apre anche offline.
 
 ## Dove finiscono i dati
 
