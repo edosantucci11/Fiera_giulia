@@ -7,7 +7,7 @@ Funziona da smartphone, tablet e PC. Tutti i dati inseriti restano sul dispositi
 
 | File | A cosa serve |
 |---|---|
-| `index.html` | L'app completa, in un unico file: dati iniziali, caratteri, generatore PDF, lettore QR e lettore di PDF già inclusi |
+| `index.html` | L'app completa, in un unico file: dati iniziali, piantine ufficiali dei padiglioni 8A e 8B, elenco espositori ufficiale dei due padiglioni, caratteri, generatore PDF, lettore QR e lettore di PDF già inclusi |
 | `sw.js` | Permette di aprire l'app anche senza connessione, dopo la prima apertura |
 | `.nojekyll` | Dice a GitHub Pages di pubblicare i file così come sono |
 
