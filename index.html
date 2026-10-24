@@ -837,7 +837,9 @@ const visitOrder={"da-visitare":0,"da-ricontattare":1,"visitato":2,"scartato":3}
 const CT_FIELDS=[["nome","Nome","text"],["ruolo","Ruolo","text"],["azienda","Azienda","text"],["email","Email","email"],["tel","Telefono","tel"],["web","Sito web","url"]];
 const TABS=[["macchinari","Macchinari"],["materie","Materie"],["mappa","Mappa"],["espositori","Espositori"],["impostazioni","Impostazioni"]];
 
-let ST=null,idb=null,noIdb=false;
+let ST=null,idb=null,noIdb=false,persisted=null;
+const isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
+const isStandalone=()=>!!((window.matchMedia&&matchMedia("(display-mode: standalone)").matches)||navigator.standalone);
 const urlCache=new Map();
 const UI={tab:"macchinari",voceId:null,candId:null,espId:null,sheet:null,q:"",espFilter:"tutti",espLang:"it",
   armed:null,addCand:false,newEsp:false,newVoce:false,addEspSearch:"",uploading:0,importData:null,editCt:null,freshCt:null,freshFoto:null,freshClip:null,flash:null,
@@ -848,6 +850,7 @@ const UI={tab:"macchinari",voceId:null,candId:null,espId:null,sheet:null,q:"",es
 const $=(s,r=document)=>r.querySelector(s);
 const h=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+const webHref=u=>{u=String(u||"").trim();return /^https?:\/\//i.test(u)?u:"https://"+u.replace(/^\/+/,"")};
 const fid=k=>"f-"+k.replace(/[^a-zA-Z0-9_-]/g,"_");
 const clone=o=>JSON.parse(JSON.stringify(o));
 function toast(msg){const t=$("#toast");t.hidden=true;void t.offsetWidth;t.textContent=msg;t.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>t.hidden=true,2800)}
@@ -923,6 +926,8 @@ function normalize(st){
     if(!Array.isArray(c.contatti)){c.contatti=[];const o=c.contatto||{};if(o.nome||o.email||o.tel)c.contatti.push({id:"k"+uid(),nome:o.nome||"",ruolo:"",azienda:"",email:o.email||"",tel:o.tel||"",web:"",note:""})}
     delete c.contatto;c.foto=c.foto||[];c.check=c.check||{};c.audio=c.audio||[];
   }
+  for(const e of Object.values(st.esp)){if(e.origine!=="elenco"||!e.padiglione)continue;
+    const f=fairOfHall(normHall(e.padiglione));e.fiera=f;if(e.notaFonte)e.notaFonte=e.notaFonte.replace(/elenco espositori ufficiale (COMPAMED|MEDICA) 2026/,"elenco espositori ufficiale "+f+" 2026")}
   return st;
 }
 function applySeedPatch(st){
@@ -935,6 +940,11 @@ function applySeedPatch(st){
     if(pt.rimuovi&&e.notaFonte)e.notaFonte=e.notaFonte.split(pt.rimuovi).join("").replace(/\s{2,}/g," ").trim();
     if(pt.nota&&!(e.notaFonte||"").includes(pt.nota))e.notaFonte=((e.notaFonte?e.notaFonte+" ":"")+pt.nota).trim()}
   st.seedVer=SEED.ver||1;
+}
+async function askPersist(){
+  try{if(navigator.storage&&navigator.storage.persisted){persisted=await navigator.storage.persisted();if(!persisted&&navigator.storage.persist)persisted=await navigator.storage.persist()}}catch(_){}
+  if(isIOS&&!isStandalone()){let shown=false;try{shown=sessionStorage.getItem("fiera-ios-hint")}catch(_){}
+    if(!shown){try{sessionStorage.setItem("fiera-ios-hint","1")}catch(_){}setTimeout(()=>toast("Su iPhone aggiungi l'app alla schermata Home (Condividi → Aggiungi a Home): da Safari i dati possono essere cancellati dopo 7 giorni senza aprirla."),1500)}}
 }
 async function loadState(){
   try{idb=await openDb()}catch(_){idb=null;noIdb=true}
@@ -960,6 +970,7 @@ function hallMap(hall){const hh=normHall(hall);return Object.values(M()).find(m=
 function posOf(e){if(!e)return null;if(e.pos&&M()[e.pos.mapId])return e.pos;if(e.noAutoPin)return null;
   const m=hallMap(e.padiglione),xy=m&&standXY(e.padiglione,e.stand);return xy?{mapId:m.id,x:xy[0],y:xy[1],auto:true}:null}
 const DIR=HALLS.dir;
+const fairOfHall=hh=>(hh==="8A"||hh==="8B")?"COMPAMED":"MEDICA";
 function dirKnown(row){const st=row[2].toUpperCase(),hh=row[1];const nm=row[0].toLowerCase();
   return Object.values(E()).find(e=>normHall(e.padiglione)===hh&&String(e.stand||"").toUpperCase()===st&&nm.includes(String(e.nome).split(/[\s(]+/)[0].toLowerCase()))||null}
 function espStatus(eid){const cs=candOfEsp(eid);if(!cs.length)return"none";
@@ -999,7 +1010,11 @@ const blobToDataURL=b=>new Promise((r,j)=>{const fr=new FileReader();fr.onload=(
 const dataURLToBlob=async u=>(await fetch(u)).blob();
 
 /* ---------- registrazioni audio ---------- */
-let REC={active:false};
+let REC={active:false},wakeLock=null;
+async function keepAwake(on){
+  try{if(on){if(!wakeLock&&navigator.wakeLock){wakeLock=await navigator.wakeLock.request("screen");wakeLock.addEventListener("release",()=>{wakeLock=null})}}
+    else if(wakeLock){const w=wakeLock;wakeLock=null;await w.release()}}catch(_){wakeLock=null}
+}
 const BARS=28;
 function recSupported(){return !!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia&&window.MediaRecorder)}
 function extOf(mime){mime=String(mime||"");if(mime.includes("mp4")||mime.includes("aac")||mime.includes("m4a"))return"m4a";if(mime.includes("webm"))return"webm";if(mime.includes("ogg"))return"ogg";if(mime.includes("mpeg")||mime.includes("mp3"))return"mp3";if(mime.includes("wav"))return"wav";return"audio"}
@@ -1015,7 +1030,7 @@ async function startRec(candId){
   const chunks=[];rec.ondataavailable=e=>{if(e.data&&e.data.size)chunks.push(e.data)};
   let ac=null,an=null;try{const AC=window.AudioContext||window.webkitAudioContext;ac=new AC();an=ac.createAnalyser();an.fftSize=512;ac.createMediaStreamSource(stream).connect(an)}catch(_){}
   REC={active:true,candId,stream,rec,chunks,ac,an,start:Date.now(),mime:rec.mimeType||mime,levels:new Array(BARS).fill(.06),last:0,discard:false};
-  rec.onstop=onRecStop;rec.start(1000);buzz(30);render();recLoop();
+  rec.onstop=onRecStop;rec.start(1000);keepAwake(true);buzz(30);render();recLoop();
 }
 function recLoop(){
   if(!REC.active)return;
@@ -1031,7 +1046,7 @@ function stopRec(keep){if(!REC.active)return;REC.discard=!keep;REC.dur=(Date.now
 async function onRecStop(){
   const r=REC;if(!r.active)return;r.active=false;
   try{r.stream.getTracks().forEach(t=>t.stop())}catch(_){}try{r.ac&&r.ac.close()}catch(_){}
-  REC={active:false};
+  REC={active:false};keepAwake(false);
   if(!r.discard&&r.chunks.length){
     const blob=new Blob(r.chunks,{type:r.mime||r.chunks[0].type||"audio/webm"});const id="a"+uid();
     try{await blobPut(id,blob);const c=C()[r.candId];if(c){c.audio=[...(c.audio||[]),{id,t:r.start,dur:Math.round(r.dur||0),mime:blob.type,nome:""}];UI.freshClip=id;save()}toast("Registrazione salvata");buzz(20)}
@@ -1370,7 +1385,7 @@ function personRow(c,ct){
   }
   return `<div class="person ${UI.freshCt===ct.id?"fresh":""}"><span class="avatar">${h(initials(ct.nome))}</span><div class="pinfo">
     <b>${h(ct.nome||"Senza nome")}</b>${ct.ruolo||ct.azienda?`<span class="small muted">${h([ct.ruolo,ct.azienda].filter(Boolean).join(" · "))}</span>`:""}
-    ${ct.email?`<a class="small" href="mailto:${h(ct.email)}">${h(ct.email)}</a>`:""}${ct.tel?`<a class="small" href="tel:${h(ct.tel.replace(/\s+/g,""))}">${h(ct.tel)}</a>`:""}${ct.web?`<a class="small" href="${h(/^https?:/i.test(ct.web)?ct.web:"https://"+ct.web)}" target="_blank" rel="noopener">${h(ct.web)}</a>`:""}
+    ${ct.email?`<a class="small" href="mailto:${h(ct.email)}">${h(ct.email)}</a>`:""}${ct.tel?`<a class="small" href="tel:${h(ct.tel.replace(/\s+/g,""))}">${h(ct.tel)}</a>`:""}${ct.web?`<a class="small" href="${h(webHref(ct.web))}" target="_blank" rel="noopener">${h(ct.web)}</a>`:""}
     ${ct.note?`<span class="small muted clamp">${h(ct.note)}</span>`:""}
     <div class="row" style="margin-top:2px"><button class="btn ghost small" data-act="ct-edit" data-k="${ct.id}">Modifica</button><button class="btn ghost small" data-act="ct-vcf" data-id="${c.id}" data-k="${ct.id}">Salva in rubrica</button></div></div></div>`;
 }
@@ -1378,6 +1393,7 @@ function audioCard(c,idx){
   const clips=c.audio||[],recHere=REC.active&&REC.candId===c.id;
   let out=`<div class="card" ${st(idx)}><div class="head"><h3>Registrazioni</h3><span class="mono small muted">${clips.length}</span></div>`;
   if(recHere){out+=`<div class="recbox"><span class="recdot"></span><span class="rectime" id="rectime">${mmss((Date.now()-REC.start)/1000)}</span><div class="bars" id="recbars">${REC.levels.map(l=>`<i style="height:${Math.round(l*100)}%"></i>`).join("")}</div></div>
+    <p class="small muted">Tieni l'app aperta e lo schermo acceso: se cambi app o il telefono si blocca, la registrazione si ferma e viene salvata fin lì.</p>
     <div class="row"><button class="btn red" data-act="rec-stop">${I.stop} Stop e salva</button><button class="btn ghost" data-act="rec-cancel">Annulla</button></div>`}
   clips.forEach((a,j)=>{const kk="au:"+c.id+":"+a.id+":nome";
     out+=`<div class="clip ${UI.freshClip===a.id?"fresh":""}"><div class="between"><b>${h(a.nome||"Registrazione "+(j+1))}</b><span class="mono small muted">${mmss(a.dur||0)} · ${h(new Date(a.t).toLocaleString("it-IT",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}))}</span></div>
@@ -1472,7 +1488,7 @@ function viewEsp(e){
   <div class="cols"><div class="col">
   <div class="card" ${st(i++)}><div class="head"><h3>Di cosa si occupa</h3><div class="seg" role="group" aria-label="Lingua"><button data-act="esplang" data-v="it" aria-pressed="${UI.espLang==="it"}">IT</button><button data-act="esplang" data-v="en" aria-pressed="${UI.espLang==="en"}">EN</button></div></div>
   <p>${h(d||"Descrizione non inserita.")}</p>
-  <div class="row">${e.sito?`<a class="btn" href="${h(e.sito)}" target="_blank" rel="noopener">Sito web ${I.ext}</a>`:""}${e.fonte?`<a class="btn" href="${h(e.fonte)}" target="_blank" rel="noopener">Fonte ${I.ext}</a>`:""}</div>
+  <div class="row">${e.sito?`<a class="btn" href="${h(webHref(e.sito))}" target="_blank" rel="noopener">Sito web ${I.ext}</a>`:""}${e.fonte?`<a class="btn" href="${h(e.fonte)}" target="_blank" rel="noopener">Fonte ${I.ext}</a>`:""}</div>
   ${e.notaFonte?`<p class="small muted">${h(e.notaFonte)}</p>`:""}</div>
   </div><div class="col">
   <div class="card" ${st(i++)}><h3>Collegato a</h3>`;
@@ -1570,6 +1586,7 @@ function viewImp(){
   <div class="card" ${st(i++)}><h3>Firma sulla scheda in inglese</h3><p class="small muted">Compare in fondo alla scheda e al PDF per i fornitori.</p>
     ${f("azienda","Azienda")}<div class="grid2">${f("referente","Nome e cognome")}${f("ruolo","Ruolo (in inglese)")}</div><div class="grid2">${f("email","Email","email")}${f("telefono","Telefono","tel")}</div></div>
   <div class="card" ${st(i++)}><h3>Dove sono salvati i dati</h3><p class="small">Tutto resta su questo dispositivo, in questo browser. Non cancellare i dati di navigazione del sito ed esporta il file dati ogni tanto come copia di sicurezza.</p>
+    ${isIOS&&!isStandalone()?`<div class="notice">Stai usando l'app da Safari: se non la apri per 7 giorni, iPhone può cancellare appunti, foto e registrazioni. Aggiungila alla schermata Home (Condividi → Aggiungi a Home) e usala da lì.</div>`:persisted===false?`<div class="notice">Il browser non ha concesso l'archivio permanente: se il dispositivo resta senza spazio i dati potrebbero essere cancellati. Installa l'app ed esporta spesso il file dati.</div>`:""}
     ${noIdb?`<div class="notice">Questo browser non consente l'archivio completo: foto, registrazioni e piantine non si possono salvare. Apri l'app con Safari o Chrome.</div>`:""}
     <div><button class="btn danger ${UI.armed==="reset"?"armed":""}" data-act="reset">${UI.armed==="reset"?"Conferma: cancella tutto, anche foto, audio e piantine":"Ripristina i dati iniziali"}</button></div></div></div>`;
 }
@@ -1750,7 +1767,7 @@ document.addEventListener("click",ev=>{
   const b=ev.target.closest("[data-act]");if(!b)return;act(b.dataset.act,b);
 });
 
-function go(fn,nav="fwd"){UI.armed=null;UI.addCand=false;UI.newEsp=false;UI.addEspSearch="";UI.editCt=null;UI.nav=nav;fn();render();window.scrollTo(0,0)}
+function go(fn,nav="fwd"){armBack();UI.armed=null;UI.addCand=false;UI.newEsp=false;UI.addEspSearch="";UI.editCt=null;UI.nav=nav;fn();render();window.scrollTo(0,0)}
 function newCand(voceId,espId,motivo=""){const id="c"+uid();ST.cand[id]={id,voceId,espId,motivo,visita:"da-visitare",check:{},appunti:"",contatti:[],foto:[],audio:[],creato:Date.now()};save();return id}
 function removeCand(c){dropBlobs(candBlobIds(c));if(REC.active&&REC.candId===c.id)stopRec(false);delete ST.cand[c.id]}
 function goMap(fn){go(()=>{UI.tab="mappa";UI.voceId=UI.candId=UI.espId=null;UI.pickOpen=false;fn()},"tab");window.scrollTo(0,0)}
@@ -1849,7 +1866,7 @@ function act(a,b){
     if(!xy||!m){toast("Stand non individuabile sulla piantina.");return}
     goMap(()=>{if(UI.mapId!==m.id){UI.mapId=m.id;MV.fitted=false}UI.tempPin={i,name:row[0],hall:row[1],stand:row[2],x:xy[0],y:xy[1],mapId:m.id};UI.pinSel=null;UI.place=null;UI.findOpen=false;UI.focusPin="__temp"});break}
   case "dir-add":{const i=+b.dataset.i,row=DIR[i],vid=b.dataset.voce;let e=dirKnown(row);
-    if(!e){const eid="e"+uid();e=ST.esp[eid]={id:eid,nome:row[0],padiglione:row[1].toLowerCase(),stand:row[2],paese:"",sito:"",stato:"confermato-2026",descIt:"",descEn:"",fiera:"COMPAMED",fonte:"",notaFonte:`Dall'elenco espositori ufficiale COMPAMED 2026, padiglione ${row[1]}.`,origine:"elenco"}}
+    if(!e){const eid="e"+uid();e=ST.esp[eid]={id:eid,nome:row[0],padiglione:row[1].toLowerCase(),stand:row[2],paese:"",sito:"",stato:"confermato-2026",descIt:"",descEn:"",fiera:fairOfHall(row[1]),fonte:"",notaFonte:`Dall'elenco espositori ufficiale ${fairOfHall(row[1])} 2026, padiglione ${row[1]}.`,origine:"elenco"}}
     let c=candOfEsp(e.id).find(x=>x.voceId===vid);const cid=c?c.id:newCand(vid,e.id);save();UI.tempPin=null;toast(c?"Già collegato a questa voce":"Aggiunto ai fornitori candidati");
     go(()=>{UI.candId=cid;const v=V()[vid];UI.tab=v&&v.tipo==="materia"?"materie":"macchinari"});break}
   case "pin-focus":{const e=E()[id],q=posOf(e);if(!q)return;UI.pinSel=id;UI.tempPin=null;render();centerOn(q.x,q.y);$("#mapbox")?.scrollIntoView({behavior:"smooth",block:"center"});break}
@@ -1864,8 +1881,26 @@ function act(a,b){
   }
 }
 
+/* ---------- tasto Indietro (Android, gesto indietro) ---------- */
+function armBack(){try{if(!history.state||!history.state.fiera)history.pushState({fiera:1},"")}catch(_){}}
+function atHome(){return !UI.candId&&!UI.voceId&&!UI.espId&&UI.tab==="macchinari"}
+window.addEventListener("popstate",()=>{
+  if(!ST)return;
+  const lb=$(".lightbox");
+  if(lb)lb.remove();
+  else if(UI.scan)closeScanner();
+  else if(UI.sheet){UI.sheet=null;renderSheet()}
+  else if(UI.place){UI.place=null;render()}
+  else if(UI.candId){const c=C()[UI.candId];go(()=>{UI.candId=null;UI.voceId=c?c.voceId:null},"back")}
+  else if(UI.voceId||UI.espId)go(()=>{UI.voceId=UI.candId=UI.espId=null},"back");
+  else if(UI.tab!=="macchinari")go(()=>{UI.tab="macchinari";UI.newVoce=false},"tab");
+  else{toast("Premi di nuovo Indietro per uscire");return}
+  armBack();
+});
+armBack();
+
 /* ---------- avvio ---------- */
-loadState().then(()=>{UI.nav="tab";render()}).catch(()=>{ST=normalize(clone(SEED));UI.nav="tab";render()});
+loadState().then(()=>{UI.nav="tab";render();askPersist().then(()=>{if(UI.tab==="impostazioni")render()})}).catch(()=>{ST=normalize(clone(SEED));UI.nav="tab";render()});
 if("serviceWorker" in navigator&&(location.protocol==="https:"||location.hostname==="localhost")){navigator.serviceWorker.register("sw.js").catch(()=>{})}
 })();
 </script>

@@ -25,7 +25,7 @@ L'indirizzo è **https**, quindi fotocamera (lettura QR) e microfono (registrazi
 
 ## Installazione sul telefono
 
-- **iPhone (Safari):** apri l'indirizzo, tocca *Condividi* e poi *Aggiungi alla schermata Home*.
+- **iPhone (Safari):** apri l'indirizzo, tocca *Condividi* e poi *Aggiungi alla schermata Home*. Usa poi l'app dall'icona: da Safari, se non la apri per 7 giorni, iPhone può cancellare i dati inseriti.
 - **Android (Chrome):** apri l'indirizzo del sito con Chrome, tocca il menu ⋮ e poi *Installa app* (o *Aggiungi a schermata Home*). Non scaricare il file `index.html` sul telefono: va aperto dall'indirizzo `https://…github.io/…`.
 
 Aprila una volta con la rete attiva e attendi qualche secondo: l'app salva anche tutte le piantine, e da quel momento si apre anche offline.
@@ -38,4 +38,6 @@ Non cancellare i dati di navigazione del sito, altrimenti il contenuto inserito 
 
 ## Aggiornare l'app
 
-Sostituisci `index.html` nel repository con la nuova versione. I dati già inseriti sui dispositivi restano.
+Sostituisci `index.html` (e `sw.js`, se è cambiato) nel repository con la nuova versione. I dati già inseriti sui dispositivi restano.
+
+L'app si apre sempre dalla copia salvata sul dispositivo, così è veloce anche con la rete scarsa della fiera, e scarica gli aggiornamenti in background: la nuova versione compare **dalla seconda apertura** dopo la pubblicazione.
